@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="DEFAULT" class="net.logstash.logback.appender.LoggingEventAsyncDisruptorAppender">
+        <appender class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <timeZone>UTC</timeZone>
+                    </timestamp>
+                    <logstashMarkers/>
+                    <arguments/>
+                    <pattern>
+                        <pattern>
+                            {
+                            "service": "${service}",
+                            "version": "${version}",
+                            "team": "${team}",
+                            "region": "${region}",
+                            "deployment": "${deployment}",
+                            "logger": "%logger",
+                            "level": "%level",
+                            "summary": "%message"
+                            }
+                        </pattern>
+                    </pattern>
+                    <stackTrace>
+                        <fieldName>error-stacktrace</fieldName>
+                        <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                            <rootCauseFirst>true</rootCauseFirst>
+                        </throwableConverter>
+                    </stackTrace>
+                    <stackHash>
+                        <fieldName>error-stackhash</fieldName>
+                    </stackHash>
+                </providers>
+            </encoder>
+        </appender>
+    </appender>
+
+    <root level="ERROR">
+        <appender-ref ref="DEFAULT"/>
+    </root>
+
+    <!-- Use the following to control log levels and filtering, at the package level -->
+    <logger name="software.amazon.awssdk" level="WARN" />
+</configuration>
