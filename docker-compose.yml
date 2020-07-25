@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4592"
+      - "4593"
+      - "4599"
+    environment:
+      - DEBUG=1
+      - DEFAULT_REGION=${AWS_REGION:-eu-west-1}
+      - SERVICES=sts,iam,kms
+      - TEST_AWS_ACCOUNT_ID=${ADMIN_ACCOUNT:-000000000000},${USER_ACCOUNT:-000000000000}
+    networks:
+      - internal
+
+networks:
+  internal:

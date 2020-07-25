@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="net.logstash.logback.appender.LoggingEventAsyncDisruptorAppender">
+        <appender class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} [%-5level] %logger{50} - %msg%n%rEx</pattern>
+            </encoder>
+        </appender>
+    </appender>
+
+    <root level="${logLevel}">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <!-- Use the following to control log levels and filtering, at the package level -->
+    <logger name="software.amazon.awssdk" level="WARN" />
+</configuration>

@@ -1,0 +1,78 @@
+/**
+ * Copyright [2020] [Carl Pulley]
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package uk.acmelabs.datasecurity.producer;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.security.auth.DestroyFailedException;
+import java.nio.ByteBuffer;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+
+import uk.acmelabs.datasecurity.api.Message;
+import uk.acmelabs.datasecurity.aws.api.crypto.DataKeyEncryptor;
+import uk.acmelabs.datasecurity.api.CMK;
+import uk.acmelabs.datasecurity.aws.api.model.PlaintextDataKey;
+import uk.acmelabs.datasecurity.aws.client.KMS;
+
+final public class DataProducer {
+
+  private final KMS kms;
+  private final Function<Message, CompletableFuture<Void>> deliver;
+  private final ProducerConfig config;
+
+  public DataProducer(final Function<Message, CompletableFuture<Void>> deliver, final ProducerConfig config) {
+    this.deliver = deliver;
+    this.config = config;
+    this.kms = new KMS(config.encryptRole(), config);
+  }
+
+  final public CompletableFuture<Void> send(final ByteBuffer data, final CMK cmk) {
+    assert data.isReadOnly();
+
+    return
+      kms
+        .generateDataKey(cmk)
+        .thenComposeAsync(dataKey -> {
+            try {
+              final PlaintextDataKey plaintextKey = dataKey.plaintextKey();
+              try {
+                final DataKeyEncryptor encryptor = new DataKeyEncryptor(plaintextKey);
+                 final byte[] encryptedData = encryptor.encrypt(data);
+
+                return deliver.apply(new Message(encryptedData, dataKey.encryptedKey(), encryptor.getIV(), cmk));
+              } finally {
+                plaintextKey.destroy();
+              }
+            } catch (NoSuchAlgorithmException
+              | NoSuchPaddingException
+              | InvalidKeyException
+              | InvalidAlgorithmParameterException
+              | IllegalBlockSizeException
+              | BadPaddingException
+              | DestroyFailedException exn
+            ) {
+              return CompletableFuture.failedFuture(exn);
+            }
+          },
+          config.defaultExecutor()
+        );
+  }
+}

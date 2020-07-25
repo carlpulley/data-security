@@ -1,0 +1,190 @@
+import com.github.lkishalmi.gradle.gatling.GatlingRunTask
+
+plugins {
+    id 'checkstyle'
+    id 'com.avast.gradle.docker-compose' version '0.12.1'
+    id 'com.github.hierynomus.license' version '0.15.0'
+    id 'com.github.lkishalmi.gatling' version '3.3.1'
+    id 'jacoco'
+    id 'java-library'
+    id 'pl.allegro.tech.build.axion-release' version '1.12.0'
+    id 'scala'
+}
+
+allprojects {
+    repositories {
+        jcenter()
+    }
+
+    dependencies {
+        implementation 'ch.qos.logback:logback-classic:1.3.0-alpha5'
+        implementation 'net.logstash.logback:logstash-logback-encoder:6.4'
+        implementation 'org.slf4j:slf4j-api:1.7.30'
+
+        implementation platform('software.amazon.awssdk:bom:2.13.71')
+        implementation 'software.amazon.awssdk:auth'
+        implementation 'software.amazon.awssdk:iam'
+        implementation 'software.amazon.awssdk:kms'
+        implementation 'software.amazon.awssdk:sts'
+
+        // TODO: until Gatling upgrades to use 2.13, we're forced to use Scala 2.12 for testing!
+        testImplementation 'com.lihaoyi:pprint_2.12:0.5.9'
+        testImplementation 'junit:junit:4.13'
+        testImplementation 'org.scala-lang.modules:scala-java8-compat_2.12:0.9.1'
+        testImplementation 'org.scala-lang:scala-library:2.12.12'
+        testImplementation 'org.scalatest:scalatest-core_2.12:3.2.0'
+        testImplementation 'org.scalatest:scalatest-freespec_2.12:3.2.0'
+        testImplementation 'org.scalatest:scalatest-shouldmatchers_2.12:3.2.0'
+        testImplementation 'org.scalatestplus:scalacheck-1-14_2.12:3.2.0.0'
+        testImplementation 'org.scalatestplus:scalatestplus-junit_2.12:1.0.0-M2'
+
+        gatlingImplementation 'ch.qos.logback:logback-classic:1.3.0-alpha5'
+        gatlingImplementation 'net.logstash.logback:logstash-logback-encoder:6.4'
+        gatlingImplementation 'org.slf4j:slf4j-api:1.7.30'
+
+        gatlingImplementation platform('software.amazon.awssdk:bom:2.13.71')
+        gatlingImplementation 'software.amazon.awssdk:auth'
+        gatlingImplementation 'software.amazon.awssdk:iam'
+        gatlingImplementation 'software.amazon.awssdk:kms'
+        gatlingImplementation 'software.amazon.awssdk:sts'
+
+        gatlingImplementation 'org.scalatest:scalatest-core_2.12:3.2.0'
+        gatlingImplementation 'org.scalatestplus:scalacheck-1-14_2.12:3.2.0.0'
+    }
+
+    license {
+        ext {
+            maintainer = 'Carl Pulley'
+            startYear = '2020'
+        }
+        header file("LICENSE")
+        include "**/*.java"
+        include "**/*.scala"
+        ignoreFailures false
+        skipExistingHeaders false
+        strictCheck true
+    }
+
+    project.version = scmVersion.version
+
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility =  JavaVersion.VERSION_11
+
+// FIXME:
+//    java {
+//        modularity.inferModulePath = true
+//    }
+
+    tasks.withType(JavaCompile) {
+        options.compilerArgs += [
+                '-Xlint:all',
+                '-Werror'
+        ]
+    }
+
+    dockerCompose.isRequiredBy(test)
+    tasks.withType(GatlingRunTask) {
+        dockerCompose.isRequiredBy(it)
+    }
+
+    dockerCompose {
+        useComposeFiles = ['./docker-compose.yml']
+        startedServices = ['localstack']
+        waitForTcpPortsTimeout = Duration.ofMinutes(10)
+        waitForHealthyStateTimeout = Duration.ofMinutes(10)
+        captureContainersOutputToFile = './build/docker-compose.log'
+    }
+
+    test.doFirst {
+        def localstackInfo = dockerCompose.servicesInfos.localstack.firstContainer
+
+        // For testing, we assume localstack endpoints if nothing is specified
+        if (System.getenv('STS_ENDPOINT') == null) {
+            systemProperty 'STS_ENDPOINT', "http://localhost:${localstackInfo.ports[4592]}"
+        }
+        if (System.getenv('IAM_ENDPOINT') == null) {
+            systemProperty 'IAM_ENDPOINT', "http://localhost:${localstackInfo.ports[4593]}"
+        }
+        if (System.getenv('KMS_ENDPOINT') == null) {
+            systemProperty 'KMS_ENDPOINT', "http://localhost:${localstackInfo.ports[4599]}"
+        }
+        if (System.getenv('AWS_REGION') == null) {
+            systemProperty 'AWS_REGION', 'eu-west-1'
+        }
+    }
+    tasks.withType(GatlingRunTask) {
+        it.doFirst {
+            def localstackInfo = dockerCompose.servicesInfos.localstack.firstContainer
+            systemProperties = [:]
+
+            // For testing, we assume localstack endpoints if nothing is specified
+            if (System.getenv('STS_ENDPOINT') == null) {
+                systemProperties.put('STS_ENDPOINT', "http://localhost:${localstackInfo.ports[4592]}")
+            }
+            if (System.getenv('IAM_ENDPOINT') == null) {
+                systemProperties.put('IAM_ENDPOINT', "http://localhost:${localstackInfo.ports[4593]}")
+            }
+            if (System.getenv('KMS_ENDPOINT') == null) {
+                systemProperties.put('KMS_ENDPOINT', "http://localhost:${localstackInfo.ports[4599]}")
+            }
+            if (System.getenv('AWS_REGION') == null) {
+                systemProperties.put('AWS_REGION', 'eu-west-1')
+            }
+        }
+    }
+
+    test {
+        finalizedBy jacocoTestReport
+    }
+
+    jacocoTestReport {
+        dependsOn test
+    }
+
+    jacocoTestCoverageVerification {
+        violationRules {
+            rule {
+                limit {
+                    counter = 'LINE'
+                    value = 'TOTALCOUNT'
+                    minimum = 0.9
+                }
+            }
+
+            rule {
+                limit {
+                    counter = 'BRANCH'
+                    value = 'TOTALCOUNT'
+                    minimum = 0.75
+                }
+            }
+        }
+    }
+
+    check.dependsOn jacocoTestCoverageVerification
+
+    gradle.startParameter.showStacktrace = ShowStacktrace.ALWAYS_FULL
+
+    gatling {
+        simulations = {
+            include "**/EncrptDataTestSimulation.scala"
+            include "**/DecrptDataTestSimulation.scala"
+            include "**/EncrptAndDecryptDataTestSimulation.scala"
+        }
+    }
+
+    jar {
+        manifest {
+            attributes(
+                    'Library-Name': project.name,
+                    'Library-Version': project.version,
+                    'Build-hostname': "hostname".execute().text.trim(),
+                    'Build-user': "whoami".execute().text.trim(),
+                    'Git-version': "git --version".execute().text.trim(),
+                    'Git-branch': "git symbolic-ref --short -q HEAD".execute().text.trim(),
+                    'Git-commit-hash': "git rev-parse --verify HEAD".execute().text.trim(),
+                    'Docker-version': "docker --version".execute().text.trim()
+            )
+        }
+    }
+}
