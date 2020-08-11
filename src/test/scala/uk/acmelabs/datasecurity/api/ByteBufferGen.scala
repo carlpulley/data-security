@@ -20,8 +20,6 @@ import java.nio.ByteBuffer
 import org.scalacheck.{Arbitrary, Gen}
 
 object ByteBufferGen {
-  val genByteArray: Gen[Array[Byte]] = Gen.listOf(Arbitrary.arbByte.arbitrary).map(_.toArray)
-
   val genByteBuffer: Gen[ByteBuffer] = {
     for {
       bytes <- Gen.listOf(Arbitrary.arbByte.arbitrary)
