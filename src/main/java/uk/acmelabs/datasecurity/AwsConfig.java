@@ -71,7 +71,7 @@ public class AwsConfig {
     return
       ClientAsyncConfiguration
         .builder()
-        .advancedOption(SdkAdvancedAsyncClientOption.FUTURE_COMPLETION_EXECUTOR, defaultExecutor())
+        .advancedOption(SdkAdvancedAsyncClientOption.FUTURE_COMPLETION_EXECUTOR, awsExecutor())
         .build();
   }
 
