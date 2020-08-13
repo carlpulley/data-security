@@ -15,6 +15,9 @@
  */
 package uk.acmelabs.datasecurity.api;
 
+import static java.util.Map.entry;
+import java.util.Map;
+
 import software.amazon.awssdk.services.kms.model.KeyMetadata;
 
 public class CMK {
@@ -42,5 +45,12 @@ public class CMK {
 
   public String toString() {
     return String.format("CMK(id=%s, arn=%s)", id, arn);
+  }
+
+  public Map<String, Object> toMap() {
+    return Map.ofEntries(
+      entry("id", id),
+      entry("arn", arn)
+    );
   }
 }

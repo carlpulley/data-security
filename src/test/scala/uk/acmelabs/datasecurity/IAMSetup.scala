@@ -25,8 +25,10 @@ import uk.acmelabs.datasecurity.util.{IAMUtil, KMSUtil}
 
 final class IAMSetup(config: AwsConfig)(implicit ec: ExecutionContext) extends IAMUtil(config)(ec) {
 
+  private val awaitTimeout: FiniteDuration = 30.seconds
+
   val kmsAdminUser: User = {
-    Await.result(IAMUser.create("kms-admin-user"), 30.seconds)
+    Await.result(IAMUser.create("kms-admin-user"), awaitTimeout)
   }
 
   val kmsAdminRole: Role = {
@@ -51,22 +53,22 @@ final class IAMSetup(config: AwsConfig)(implicit ec: ExecutionContext) extends I
       _ <- addAccessPolicy("kms-admin-policy", accessPolicy, role)
     } yield role
 
-    Await.result(result, 30.seconds)
+    Await.result(result, awaitTimeout)
   }
 
   private val kmsUtil = new KMSUtil(this)(kmsAdminUser, kmsAdminRole, ec)
 
   import kmsUtil._
 
-  lazy val encryptUser: Future[User] = {
-    IAMUser.create("encrypt-user")
+  val encryptUser: User = {
+    Await.result(IAMUser.create("encrypt-user"), awaitTimeout)
   }
 
-  lazy val decryptUser: Future[User] = {
-    IAMUser.create("decrypt-user")
+  val decryptUser: User = {
+    Await.result(IAMUser.create("decrypt-user"), awaitTimeout)
   }
 
-  lazy val encryptRole: Future[Role] = {
+  val encryptRole: Role = {
     val accessPolicy =
       """{
         |  "Version": "2012-10-17",
@@ -83,15 +85,16 @@ final class IAMSetup(config: AwsConfig)(implicit ec: ExecutionContext) extends I
         |  ]
         |}
         |""".stripMargin
+    val result =
+      for {
+        role <- IAMRole.create("PIIEncrypt", trustPolicy(encryptUser))
+        _ <- addAccessPolicy("encrypt-policy", accessPolicy, role)
+      } yield role
 
-    for {
-      user <- encryptUser
-      role <- IAMRole.create("PIIEncrypt", trustPolicy(user))
-      _ <- addAccessPolicy("encrypt-policy", accessPolicy, role)
-    } yield role
+    Await.result(result, awaitTimeout)
   }
 
-  lazy val decryptRole: Future[Role] = {
+  val decryptRole: Role = {
     val accessPolicy =
       """{
         |  "Version": "2012-10-17",
@@ -106,29 +109,35 @@ final class IAMSetup(config: AwsConfig)(implicit ec: ExecutionContext) extends I
         |  ]
         |}
         |""".stripMargin
+    val result =
+      for {
+        role <- IAMRole.create("PIIDecrypt", trustPolicy(decryptUser))
+        _ <- addAccessPolicy("decrypt-policy", accessPolicy, role)
+      } yield role
 
-    for {
-      user <- decryptUser
-      role <- IAMRole.create("PIIDecrypt", trustPolicy(user))
-      _ <- addAccessPolicy("decrypt-policy", accessPolicy, role)
-    } yield role
+      Await.result(result, awaitTimeout)
   }
 
-  lazy val cmk: Future[CMK] = {
-    CustomerMasterKey.create()
+  val cmk: CMK = {
+    Await.result(CustomerMasterKey.create(), awaitTimeout)
   }
 
-  lazy val cmkList: Future[Seq[CMK]] = {
-    Future.sequence {
-      (0 until 10).map(_ => CustomerMasterKey.create())
-    }
+  val cmkList: Seq[CMK] = {
+    val result =
+      Future.sequence {
+        (0 until 10).map(_ => CustomerMasterKey.create())
+      }
+
+    Await.result(result, awaitTimeout)
   }
 
-  lazy val kmsMap: Future[Map[CMK, Seq[DataKey]]] = {
-    for {
-      cmks <- cmkList
-      entries <- Future.sequence(cmks.map(dataEntry))
-    } yield Map(entries: _*)
+  val kmsMap: Map[CMK, Seq[DataKey]] = {
+    val result =
+      for {
+        entries <- Future.sequence(cmkList.map(dataEntry))
+      } yield Map(entries: _*)
+
+    Await.result(result, awaitTimeout)
   }
 
   private def dataKey(cmk: CMK): Future[DataKey] =

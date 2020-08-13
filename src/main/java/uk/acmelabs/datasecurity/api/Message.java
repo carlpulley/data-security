@@ -15,6 +15,9 @@
  */
 package uk.acmelabs.datasecurity.api;
 
+import static java.util.Map.entry;
+import java.util.Map;
+
 public class Message {
 
   private final byte[] data;
@@ -54,6 +57,15 @@ public class Message {
         toHexString(iv),
         cmk
       );
+  }
+
+  public Map<String, Object> toMap() {
+    return Map.ofEntries(
+      entry("data", toHexString(data)),
+      entry("dataKey", toHexString(dataKey)),
+      entry("iv", toHexString(iv)),
+      entry("cmk", cmk.toMap())
+    );
   }
 
   private String toHexString(final byte[] bytes) {

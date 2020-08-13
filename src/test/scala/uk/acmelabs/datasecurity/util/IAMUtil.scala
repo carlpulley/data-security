@@ -50,11 +50,12 @@ class IAMUtil(val config: AwsConfig)(implicit ec: ExecutionContext) {
       } yield response.user()
     }
 
-    def attachPolicy(policy: Policy): Future[Unit] = {
+    def attachPolicy(name: String, policy: Policy): Future[Unit] = {
       val request =
         AttachUserPolicyRequest
           .builder()
           .policyArn(policy.arn())
+          .userName(name)
           .build()
 
       for {
@@ -229,13 +230,6 @@ class IAMUtil(val config: AwsConfig)(implicit ec: ExecutionContext) {
       } yield report.accessDetails().asScala.toList
     }
 
-    final case class AuthorizationDetails(
-      userDetails: List[UserDetail],
-      roleDetails: List[RoleDetail],
-      groupDetails: List[GroupDetail],
-      policies: List[ManagedPolicyDetail]
-    )
-
     def authorizationDetails(): Future[AuthorizationDetails] = {
       for {
         response <- iam.getAccountAuthorizationDetails().toScala
@@ -250,3 +244,10 @@ class IAMUtil(val config: AwsConfig)(implicit ec: ExecutionContext) {
     }
   }
 }
+
+final case class AuthorizationDetails(
+                                       userDetails: List[UserDetail],
+                                       roleDetails: List[RoleDetail],
+                                       groupDetails: List[GroupDetail],
+                                       policies: List[ManagedPolicyDetail]
+                                     )

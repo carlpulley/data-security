@@ -167,9 +167,9 @@ allprojects {
 
     gatling {
         simulations = {
-            include "**/EncrptDataTestSimulation.scala"
-            include "**/DecrptDataTestSimulation.scala"
-            include "**/EncrptAndDecryptDataTestSimulation.scala"
+            include "EncrptDataTestSimulation.scala"
+            include "DecrptDataTestSimulation.scala"
+            include "EncrptAndDecryptDataTestSimulation.scala"
         }
     }
 

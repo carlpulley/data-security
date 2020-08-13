@@ -39,7 +39,9 @@ class PlaintextDataKeyTest
   }
 
   "Expected plaintext data key destroy behaviour" in {
-    forAll(genPlaintextDataKey) { key =>
+    val nonEmptyPlaintextDataKeyGen = genPlaintextDataKey.suchThat(_.getEncoded.length > 0)
+
+    forAll(nonEmptyPlaintextDataKeyGen.suchThat(_.getEncoded.max > 0)) { key =>
       key.isDestroyed should be(false)
 
       key.destroy()
