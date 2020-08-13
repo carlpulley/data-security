@@ -50,11 +50,12 @@ class IAMUtil(val config: AwsConfig)(implicit ec: ExecutionContext) {
       } yield response.user()
     }
 
-    def attachPolicy(policy: Policy): Future[Unit] = {
+    def attachPolicy(name: String, policy: Policy): Future[Unit] = {
       val request =
         AttachUserPolicyRequest
           .builder()
           .policyArn(policy.arn())
+          .userName(name)
           .build()
 
       for {

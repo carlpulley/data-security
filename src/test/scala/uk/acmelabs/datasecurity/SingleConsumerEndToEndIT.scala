@@ -23,6 +23,7 @@ import scala.compat.java8.FutureConverters._
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
+import net.logstash.logback.argument.StructuredArguments.keyValue
 import org.junit.runner.RunWith
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.concurrent.ScalaFutures
@@ -81,7 +82,7 @@ class SingleConsumerEndToEndIT
       new DataProducer((msg: Message) =>
         CompletableFuture.runAsync(new Runnable {
           def run(): Unit = {
-            logger.info(s"Producer processed: ${pprint.apply(msg)}")
+            logger.info("Producer.deliver", keyValue("Message", msg.toMap))
             probe += msg
           }
         }),
@@ -109,9 +110,9 @@ class SingleConsumerEndToEndIT
             val dataStr = dataCopy.map("%02X" format _).mkString
 
             if (data.capacity() == 0) {
-              logger.info(s"Consumer processed: empty data")
+              logger.info("Consumer.processor", keyValue("ByteBuffer", "empty"))
             } else {
-              logger.info(s"Consumer processed: 0x$dataStr")
+              logger.info("Consumer.processor", keyValue("ByteBuffer", s"0x$dataStr"))
             }
 
             dataProbe += data

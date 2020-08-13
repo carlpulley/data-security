@@ -42,6 +42,13 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
 
 public class AwsConfig {
 
+  /**
+   * AWS credentials provider for assuming roles via STS. Credentials provider fails over to using the AWS default
+   * credentials provider if STS fails to assume roles.
+   *
+   * @param role AWS role that is to be assumed
+   * @return AWS credentials provider
+   */
   public AwsCredentialsProvider awsCredentialsProvider(final Role role) {
     final AssumeRoleRequest roleRequest =
       AssumeRoleRequest
@@ -67,14 +74,24 @@ public class AwsConfig {
     return AwsCredentialsProviderChain.of(stsProvider, defaultProvider);
   }
 
+  /**
+   * AWS asynchronous configuration.
+   *
+   * @return AWS asynchronous configuration
+   */
   public ClientAsyncConfiguration awsAsyncConfig() {
     return
       ClientAsyncConfiguration
         .builder()
-        .advancedOption(SdkAdvancedAsyncClientOption.FUTURE_COMPLETION_EXECUTOR, defaultExecutor())
+        .advancedOption(SdkAdvancedAsyncClientOption.FUTURE_COMPLETION_EXECUTOR, awsExecutor())
         .build();
   }
 
+  /**
+   * AWS HTTP client configuration.
+   *
+   * @return AWS client configuration overrides
+   */
   public ClientOverrideConfiguration awsClientConfig() {
     return
       ClientOverrideConfiguration
@@ -86,32 +103,69 @@ public class AwsConfig {
         .build();
   }
 
+  /**
+   * AWS IAM endpoint to be used in client endpoint overrides.
+   *
+   * @return IAM URI
+   */
   public URI iamEndpoint() {
     return getEndpoint("IAM_ENDPOINT", "iam");
   }
 
+  /**
+   * AWS STS endpoint to be used in client endpoint overrides.
+   *
+   * @return STS URI
+   */
   public URI stsEndpoint() {
     return getEndpoint("STS_ENDPOINT", "sts");
   }
 
+  /**
+   * AWS KMS endpoint to be used in client endpoint overrides.
+   *
+   * @return KMS URI
+   */
   public URI kmsEndpoint() {
     return getEndpoint("KMS_ENDPOINT", "kms");
   }
 
+  /**
+   * AWS region we operate in.
+   *
+   * @return AWS region
+   */
   public Region awsRegion() {
     return Region.of(Optional.of(System.getProperty("AWS_REGION")).orElse("eu-west-1"));
   }
 
-  private final Executor awsExec = Executors.newWorkStealingPool();
+  private final Executor awsExec = Executors.newSingleThreadExecutor();
+
+  /**
+   * Defines the executor that AWS synchronous clients will use.
+   *
+   * @return executor to be used by AWS asynchronous clients
+   */
   public Executor awsExecutor() {
     return awsExec;
   }
 
   private final Executor defaultExec = Executors.newWorkStealingPool();
+
+  /**
+   * Defines the executor that AWS service pipelines will use.
+   *
+   * @return executor to be used by AWS service pipelines
+   */
   public Executor defaultExecutor() {
     return defaultExec;
   }
 
+  /**
+   * AWS retry policy for AWS asynchronous clients.
+   *
+   * @return retry policy
+   */
   public RetryPolicy awsClientRetryPolicy() {
     final BackoffStrategy backoff =
       FullJitterBackoffStrategy
@@ -127,6 +181,11 @@ public class AwsConfig {
       .build();
   }
 
+  /**
+   * Metric publisher for AWS asynchronous clients. By default, implemented as a logging publisher.
+   *
+   * @return metric publisher
+   */
   public MetricPublisher awsMetricPublisher() {
     return LoggingMetricPublisher.create();
   }
