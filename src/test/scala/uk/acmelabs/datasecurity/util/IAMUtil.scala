@@ -230,13 +230,6 @@ class IAMUtil(val config: AwsConfig)(implicit ec: ExecutionContext) {
       } yield report.accessDetails().asScala.toList
     }
 
-    final case class AuthorizationDetails(
-      userDetails: List[UserDetail],
-      roleDetails: List[RoleDetail],
-      groupDetails: List[GroupDetail],
-      policies: List[ManagedPolicyDetail]
-    )
-
     def authorizationDetails(): Future[AuthorizationDetails] = {
       for {
         response <- iam.getAccountAuthorizationDetails().toScala
@@ -251,3 +244,10 @@ class IAMUtil(val config: AwsConfig)(implicit ec: ExecutionContext) {
     }
   }
 }
+
+final case class AuthorizationDetails(
+                                       userDetails: List[UserDetail],
+                                       roleDetails: List[RoleDetail],
+                                       groupDetails: List[GroupDetail],
+                                       policies: List[ManagedPolicyDetail]
+                                     )

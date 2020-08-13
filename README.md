@@ -42,45 +42,17 @@ export KMS_ENDPOINT=https://kms.$AWS_REGION.amazonaws.com
 
 ## Gatling Load Testing
 
-### Run all Gatling Load Tests
-
-```shell script
-export NUMBER_USERS=10
-export SIMULATION_DURATION=30
-
-./gradlew gatlingRun -DnumberOfUsers=${NUMBER_USERS} -DsimulationDuration=${SIMULATION_DURATION}
-```
-
-TODO:
-
-### Run a Specific Gatling Load Test
+### Run main Gatling Load Test
 
 ```shell script
 export SIMULATION=EncryptDataTestSimulation
-export NUMBER_USERS=10
-export SIMULATION_DURATION=30
+export NUMBER_USERS=360
+export SIMULATION_DURATION=60
 
 ./gradlew gatlingRun-${SIMULATION} -DnumberOfUsers=${NUMBER_USERS} -DsimulationDuration=${SIMULATION_DURATION}
 ```
 
-TODO:
-
-### Setting up AWS STS and KMS Services for all Gatling Load Tests
-
-```shell script
-export AWS_REGION=us-east-1
-export STS_ENDPOINT=https://sts.$AWS_REGION.amazonaws.com
-export KMS_ENDPOINT=https://kms.$AWS_REGION.amazonaws.com
-
-export NUMBER_USERS=10
-export SIMULATION_DURATION=30
-
-./gradlew gatlingRun -DAWS_REGION=${AWS_REGION} -DSTS_ENDPOINT=${STS_ENDPOINT} -DKMS_ENDPOINT=${KMS_ENDPOINT} -DnumberOfUsers=${NUMBER_USERS} -DsimulationDuration=${SIMULATION_DURATION}
-```
-
-TODO:
-
-### Setting up AWS STS and KMS Services for a Specific Gatling Load Test
+### Setting up AWS STS and KMS Services for main Gatling Load Test
 
 ```shell script
 export AWS_REGION=us-east-1
@@ -88,8 +60,8 @@ export STS_ENDPOINT=https://sts.$AWS_REGION.amazonaws.com
 export KMS_ENDPOINT=https://kms.$AWS_REGION.amazonaws.com
 
 export SIMULATION=EncryptDataTestSimulation
-export NUMBER_USERS=10
-export SIMULATION_DURATION=30
+export NUMBER_USERS=360
+export SIMULATION_DURATION=60
 
 ./gradlew gatlingRun-${SIMULATION} -DAWS_REGION=${AWS_REGION} -DSTS_ENDPOINT=${STS_ENDPOINT} -DKMS_ENDPOINT=${KMS_ENDPOINT} -DnumberOfUsers=${NUMBER_USERS} -DsimulationDuration=${SIMULATION_DURATION}
 ```

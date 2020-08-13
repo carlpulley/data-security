@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 import java.nio.ByteBuffer
-import java.time.{Duration => JDuration}
-import java.time.temporal.ChronoUnit
 import java.util.concurrent.CompletableFuture
 
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.ExecutionContext.Implicits._
+import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
 
 import io.gatling.commons.stats.{KO, OK}
 import io.gatling.commons.validation._
@@ -31,33 +29,22 @@ import io.gatling.core.action.builder.ActionBuilder
 import io.gatling.core.feeder.Feeder
 import io.gatling.core.stats.StatsEngine
 import io.gatling.core.structure.{ScenarioBuilder, ScenarioContext}
-import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration
 import software.amazon.awssdk.services.iam.model.Role
 import uk.acmelabs.datasecurity.api._
 import uk.acmelabs.datasecurity.consumer.{ConsumerConfig, DataConsumer}
 import uk.acmelabs.datasecurity.producer.{DataProducer, ProducerConfig}
-import uk.acmelabs.datasecurity.{AwsConfig, IAMSetup}
+import uk.acmelabs.datasecurity.{IAMSetup, TestSetup}
 
 final case class ValidationException(error: String*) extends Exception
 
 object KMSClient {
 
-  val iamSetup = new IAMSetup(new AwsConfig {
-    override def awsClientConfig: ClientOverrideConfiguration =
-      ClientOverrideConfiguration
-        .builder
-        .apiCallAttemptTimeout(JDuration.of(1, ChronoUnit.SECONDS))
-        .apiCallTimeout(JDuration.of(10, ChronoUnit.SECONDS))
-        .retryPolicy(awsClientRetryPolicy)
-        .addMetricPublisher(awsMetricPublisher)
-        .build
-  })
-
   import ByteBufferGen._
   import MessageGen._
 
+  val iamSetup: IAMSetup = TestSetup.iamSetup
   val encryptActionFeeder: Feeder[Any] = {
-    val cmkGen = genCMK(KMSFeederData.kmsData)
+    val cmkGen = genCMK(iamSetup.kmsMap)
 
     Iterator.continually(
       for {
@@ -74,9 +61,8 @@ object KMSClient {
         data
     }
   }
-
   val decryptActionFeeder: Feeder[Any] = {
-    val messageGen = genMessage(KMSFeederData.kmsData)
+    val messageGen = genMessage(iamSetup.kmsMap)
 
     Iterator.continually(
       for {
@@ -93,25 +79,19 @@ object KMSClient {
         data
     }
   }
-
   val encryptData: EncryptActionBuilder = {
-    val role = Await.result(iamSetup.encryptRole, 30.seconds)
-
     new EncryptActionBuilder(
       "Encrypt Data",
       new ProducerConfig {
-        override def encryptRole(): Role = role
+        override def encryptRole(): Role = iamSetup.encryptRole
       }
     )
   }
-
   val decryptData: DecryptActionBuilder = {
-    val role = Await.result(iamSetup.decryptRole, 30.seconds)
-
     new DecryptActionBuilder(
       "Decrypt Data",
       new ConsumerConfig {
-        override def decryptRole(): Role = role
+        override def decryptRole(): Role = iamSetup.decryptRole
       }
     )
   }
@@ -141,7 +121,7 @@ class EncryptAction(
     val producer =
       new DataProducer(
         (message: Message) => CompletableFuture.completedFuture[Void] {
-          session.set("message", message)
+          next ! session.set("message", message)
           null
         },
         config
@@ -173,7 +153,7 @@ class EncryptAction(
 
     result.onComplete {
       case util.Success(_) =>
-        next ! session
+        // No work to do!
       case util.Failure(error) =>
         statsEngine.logCrash(session, name, error.getMessage)
     }
@@ -196,7 +176,7 @@ class DecryptAction(
         (decryptedData: ByteBuffer) => actualData match {
           case Success(expectedData) =>
             CompletableFuture.completedFuture[Void] {
-              session.set("result", (decryptedData, expectedData.value))
+              next ! session.set("result", (decryptedData, expectedData.value))
               null
             }
           case Failure(error) =>
@@ -228,7 +208,7 @@ class DecryptAction(
 
     result.onComplete {
       case util.Success(_) =>
-        next ! session
+        // No work to do!
       case util.Failure(error) =>
         statsEngine.logCrash(session, name, error.getMessage)
     }
@@ -264,11 +244,11 @@ object Scenario {
 }
 
 trait KMSSimulation extends Simulation {
-  val numberOfUsers: Int = Integer.getInteger("numberOfUsers", 10)
-  val simulationDuration: FiniteDuration = Integer.getInteger("simulationDuration", 10).seconds
+  val numberOfUsers: Int = Integer.getInteger("numberOfUsers", 350)
+  val simulationDuration: FiniteDuration = Integer.getInteger("simulationDuration", 60).seconds
   val expectedSLA: Seq[Assertion] = Seq(
     validate.successfulRequests.percent.gte(98),
-    validate.requestsPerSec.gte(100),
+    validate.requestsPerSec.gte(10),
     validate.responseTime.percentile1.lte(100),
     validate.responseTime.percentile2.lte(250),
     validate.responseTime.percentile3.lte(300),

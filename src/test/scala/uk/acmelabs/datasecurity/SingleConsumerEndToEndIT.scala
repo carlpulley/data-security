@@ -48,80 +48,62 @@ class SingleConsumerEndToEndIT
 
   implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newWorkStealingPool())
 
-  val iamSetup = new IAMSetup(new AwsConfig())
+  val iamSetup: IAMSetup = TestSetup.iamSetup
 
   val logger: Logger = LoggerFactory.getLogger("SingleConsumerEndToEndIT")
 
   val timeout: Timeout = Timeout(1.minute)
 
-  val producerConfig: Future[ProducerConfig] = {
-    for {
-      roleEncrypt <- iamSetup.encryptRole
-    } yield {
-      new ProducerConfig {
-        override def encryptRole(): Role = roleEncrypt
-      }
+  val producerConfig: ProducerConfig =
+    new ProducerConfig {
+      override def encryptRole(): Role = iamSetup.encryptRole
     }
-  }
 
-  val consumerConfig: Future[ConsumerConfig] = {
-    for {
-      roleDecrypt <- iamSetup.decryptRole
-    } yield {
-      new ConsumerConfig {
-        override def decryptRole(): Role = roleDecrypt
-      }
+  val consumerConfig: ConsumerConfig =
+    new ConsumerConfig {
+      override def decryptRole(): Role = iamSetup.decryptRole
     }
-  }
 
-  def producer(probe: mutable.ListBuffer[Message]): Future[DataProducer] = {
-    for {
-      config <- producerConfig
-    } yield {
-      // localstack does not care about authentication, so we don't bother using encryptUser credentials here
-      new DataProducer((msg: Message) =>
-        CompletableFuture.runAsync(new Runnable {
-          def run(): Unit = {
-            logger.info("Producer.deliver", keyValue("Message", msg.toMap))
-            probe += msg
-          }
-        }),
-        config
-      )
-    }
+  def producer(probe: mutable.ListBuffer[Message]): DataProducer = {
+    // localstack does not care about authentication, so we don't bother using encryptUser credentials here
+    new DataProducer((msg: Message) =>
+      CompletableFuture.runAsync(new Runnable {
+        def run(): Unit = {
+          logger.info("Producer.deliver", keyValue("Message", msg.toMap))
+          probe += msg
+        }
+      }),
+      producerConfig
+    )
   }
 
   def consumer(
                 dataProbe: mutable.ListBuffer[ByteBuffer],
                 copyProbe: mutable.ListBuffer[ByteBuffer]
-              ): Future[DataConsumer] = {
-    for {
-      config <- consumerConfig
-    } yield {
-      // localstack does not care about authentication, so we don't bother using decryptUser credentials here
-      new DataConsumer((data: ByteBuffer) =>
-        CompletableFuture.runAsync(new Runnable {
-          def run(): Unit = {
-            assert(data.isReadOnly)
+              ): DataConsumer = {
+    // localstack does not care about authentication, so we don't bother using decryptUser credentials here
+    new DataConsumer((data: ByteBuffer) =>
+      CompletableFuture.runAsync(new Runnable {
+        def run(): Unit = {
+          assert(data.isReadOnly)
 
-            val dataCopy = (0 until data.capacity()).map { index =>
-              data.get(index)
-            }.toArray[Byte]
-            val dataStr = dataCopy.map("%02X" format _).mkString
+          val dataCopy = (0 until data.capacity()).map { index =>
+            data.get(index)
+          }.toArray[Byte]
+          val dataStr = dataCopy.map("%02X" format _).mkString
 
-            if (data.capacity() == 0) {
-              logger.info("Consumer.processor", keyValue("ByteBuffer", "empty"))
-            } else {
-              logger.info("Consumer.processor", keyValue("ByteBuffer", s"0x$dataStr"))
-            }
-
-            dataProbe += data
-            copyProbe += ByteBuffer.wrap(dataCopy).asReadOnlyBuffer()
+          if (data.capacity() == 0) {
+            logger.info("Consumer.processor", keyValue("ByteBuffer", "empty"))
+          } else {
+            logger.info("Consumer.processor", keyValue("ByteBuffer", s"0x$dataStr"))
           }
-        }),
-        config
-      )
-    }
+
+          dataProbe += data
+          copyProbe += ByteBuffer.wrap(dataCopy).asReadOnlyBuffer()
+        }
+      }),
+      consumerConfig
+    )
   }
 
   "Roundtrip encrypting/decrypting of plaintext" in {
@@ -129,18 +111,11 @@ class SingleConsumerEndToEndIT
       val producerProbe = mutable.ListBuffer.empty[Message]
       val consumerOriginalProbe = mutable.ListBuffer.empty[ByteBuffer]
       val consumerCopyProbe = mutable.ListBuffer.empty[ByteBuffer]
-      val sendFuture: Future[Unit] =
-        for {
-          key <- iamSetup.cmk
-          client <- producer(producerProbe)
-          _ <- client.send(data.asReadOnlyBuffer(), key).toScala
-        } yield ()
-      val receiveObservable: Message => Future[Unit] =
+      val sendFuture: Future[Void] =
+        producer(producerProbe).send(data.asReadOnlyBuffer(), iamSetup.cmk).toScala
+      val receiveObservable: Message => Future[Void] =
         secureMessage =>
-          for {
-            client <- consumer(consumerOriginalProbe, consumerCopyProbe)
-            _ <- client.receive(secureMessage).toScala
-          } yield ()
+          consumer(consumerOriginalProbe, consumerCopyProbe).receive(secureMessage).toScala
 
       whenReady(sendFuture, timeout) { _ =>
         producerProbe should have length 1

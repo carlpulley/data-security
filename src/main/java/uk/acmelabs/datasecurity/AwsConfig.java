@@ -32,13 +32,13 @@ import software.amazon.awssdk.core.client.config.SdkAdvancedAsyncClientOption;
 import software.amazon.awssdk.core.retry.RetryPolicy;
 import software.amazon.awssdk.core.retry.backoff.BackoffStrategy;
 import software.amazon.awssdk.core.retry.backoff.FullJitterBackoffStrategy;
-import software.amazon.awssdk.metrics.LoggingMetricPublisher;
 import software.amazon.awssdk.metrics.MetricPublisher;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.iam.model.Role;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
+import uk.acmelabs.datasecurity.aws.metrics.LoggingMetricPublisher;
 
 public class AwsConfig {
 
@@ -96,8 +96,8 @@ public class AwsConfig {
     return
       ClientOverrideConfiguration
         .builder()
-        .apiCallAttemptTimeout(Duration.of(500, ChronoUnit.MILLIS))
-        .apiCallTimeout(Duration.of(10, ChronoUnit.SECONDS))
+        .apiCallAttemptTimeout(Duration.of(50, ChronoUnit.MILLIS))
+        .apiCallTimeout(Duration.of(1, ChronoUnit.SECONDS))
         .retryPolicy(awsClientRetryPolicy())
         .addMetricPublisher(awsMetricPublisher())
         .build();
@@ -139,7 +139,7 @@ public class AwsConfig {
     return Region.of(Optional.of(System.getProperty("AWS_REGION")).orElse("eu-west-1"));
   }
 
-  private final Executor awsExec = Executors.newSingleThreadExecutor();
+  private final Executor awsExec = Executors.newWorkStealingPool();
 
   /**
    * Defines the executor that AWS synchronous clients will use.
@@ -170,14 +170,14 @@ public class AwsConfig {
     final BackoffStrategy backoff =
       FullJitterBackoffStrategy
         .builder()
-        .baseDelay(Duration.of(200, ChronoUnit.MILLIS))
-        .maxBackoffTime(Duration.of(10, ChronoUnit.SECONDS))
+        .baseDelay(Duration.of(10, ChronoUnit.MILLIS))
+        .maxBackoffTime(Duration.of(1, ChronoUnit.SECONDS))
         .build();
 
     return RetryPolicy
       .builder()
       .backoffStrategy(backoff)
-      .numRetries(5)
+      .numRetries(7)
       .build();
   }
 

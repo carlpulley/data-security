@@ -37,11 +37,12 @@
         </appender>
     </appender>
 
-    <root level="INFO">
+    <root level="ERROR">
         <appender-ref ref="DEFAULT"/>
     </root>
 
     <!-- Use the following to control log levels and filtering, at the package level -->
     <logger name="software.amazon.awssdk" level="WARN" />
-    <logger name="software.amazon.awssdk.request" level="DEBUG" />
+    <logger name="software.amazon.awssdk.request" level="WARN" />
+    <logger name="uk.acmelabs.datasecurity" level="WARN" />
 </configuration>
