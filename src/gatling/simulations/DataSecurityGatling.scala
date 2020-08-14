@@ -140,6 +140,7 @@ class EncryptAction(
               Future {
                 val end = System.currentTimeMillis
                 statsEngine.logResponse(session, name, start, end, KO, None, Some(error.getMessage))
+                next ! session
                 KO
               }
           }
@@ -198,6 +199,7 @@ class DecryptAction(
               Future {
                 val end = System.currentTimeMillis
                 statsEngine.logResponse(session, name, start, end, KO, None, Some(error.getMessage))
+                next ! session
                 KO
               }
           }
